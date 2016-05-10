@@ -166,29 +166,10 @@ class HMM:
             if iters >= max_iters:           
                 done = True
             else:
-                
-                #If we have gotten better, but the amount is below the threshold, then we consider ourselves converged
-                if new_score > old_score and new_score-old_score < threshold:
-                    done = True
-                    
-                #If we are within the restart threshold, or have gotten worse, restart
-                elif new_score - old_score < restart_threshold:                   
-                    
-                    if num_restarts > max_restarts:
-                        #If we have gotten worse then we are done, else wait for convergence
-                        if new_score < old_score:
-                            done = True
-                            
-                    elif num_restarts == max_restarts:
-                        #We have already made the max number of restarts
-                        num_restarts += 1
-                        #Go back to the best so far, and then wait for convergence from there
-                        transitions = best_transitions
-                        emissions = best_emissions
-                        starts = best_starts
-                        
-                    # Inject some randomness into the parameters to break out of the local max
-                    else:
+                # If we are within the restart threshold, or have gotten worse
+                if new_score-old_score < restart_threshold:
+                    if num_restarts < max_restarts-1:
+                        # Do a restart
                         num_restarts+=1
                         random_scaling = 1
                         transitions = np.random.rand(self.num_states,self.num_states) * random_scaling
@@ -198,14 +179,24 @@ class HMM:
                         emissions = np.random.rand(self.num_states,self.emission_symbols) * random_scaling
                         emissions /= emissions.sum(axis=1)[:,np.newaxis]
                         old_score = -1e300
-                        
-                #Iterating normally
+                    elif num_restarts == max_restarts-1:
+                        #Last restart, start at the best so far
+                        num_restarts += 1
+                        transitions = best_transitions
+                        emissions = best_emissions
+                        starts = best_starts
+                    else:
+                        #Already made the maximum number of restarts
+                        #If we have "converged" or gotten worse then just finish
+                        if new_score - old_score < threshold:
+                            done = True
                 else:
+                    # Iterate normally
                     old_score = new_score
                     transitions = new_transitions
                     emissions = new_emissions
                     starts = new_starts
-                
+               
             iters += 1
             
         # Set the models parameters to be the best estimated ones
