@@ -185,11 +185,17 @@ class HMM:
                         transitions = best_transitions
                         emissions = best_emissions
                         starts = best_starts
+                        old_score = -1e300
                     else:
                         #Already made the maximum number of restarts
                         #If we have "converged" or gotten worse then just finish
                         if new_score - old_score < threshold:
                             done = True
+                        else:
+                            old_score = new_score
+                            transitions = new_transitions
+                            emissions = new_emissions
+                            starts = new_starts
                 else:
                     # Iterate normally
                     old_score = new_score
