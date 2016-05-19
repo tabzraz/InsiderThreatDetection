@@ -12,21 +12,36 @@ from HiddenMarkovModel import HiddenMarkovModel
 names = [ "r42_features_complex.h5", "r42_features_complex.h5", "r42_features_complex.h5", "r42_features_complex.h5" ]
 saves = [ "userScores_complex_r42_50_inertia_10.json","userScores_complex_r42_50_inertia_20.json","userScores_complex_r42_50_inertia_50.json","userScores_complex_r42_50_inertia_100.json" ]
 states = [ 10,20,50,100 ]
+inertias = [0.05]
 #saves = [ "userScores_simple_r41_80_inertia.json", "userScores_complex_r41_80_inertia.json", "userScores_simple_r42_80_inertia.json", "userScores_complex_r42_80_inertia.json"]
+
+filename = "/home/tabz/Documents/CMU_Dataset/r4.2/" + "r42_features_simple.h5" #+ name
+# filename = "C:/Users/tabzr/Documents/CMU Dataset/r4.2/" + "r42_features_complex.h5" #+ name
+
+print("Loading:", filename,flush=True)
+joint = pd.read_hdf(filename, "table")
+users = np.unique(joint.index.values)
+print("There are", users.size, "users", flush=True)
+num_features = np.unique(joint["feature"].values).size
+print("Using", num_features, "features", flush=True)
+
 assert(len(names) == len(saves))
-for name,save,state in zip(names,saves,states):
+for inert in inertias:
 
-    filename = "/home/tabz/Documents/CMU_Dataset/r4.2/" + name
+    userMatrices = {}
 
-    print("Loading:", filename)
-    joint = pd.read_hdf(filename, "table")
-    users = np.unique(joint.index.values)
-    print("There are", users.size, "users")
-    num_features = np.unique(joint["feature"].values).size
-    print("Using", num_features, "features")
+    # filename = "/home/tabz/Documents/CMU_Dataset/r4.2/" + "r42_features_complex.h5" #+ name
+    # # filename = "C:/Users/tabzr/Documents/CMU Dataset/r4.2/" + "r42_features_complex.h5" #+ name
+
+    # print("Loading:", filename,flush=True)
+    # joint = pd.read_hdf(filename, "table")
+    # users = np.unique(joint.index.values)
+    # print("There are", users.size, "users", flush=True)
+    # num_features = np.unique(joint["feature"].values).size
+    # print("Using", num_features, "features", flush=True)
 
     # The initial configurations for the hidden markov model
-    num_states = state
+    num_states = 10
     num_symbols = num_features
     deviation_from_uniform = 1/2
     # Seed the rng for reproducibility
@@ -68,6 +83,10 @@ for name,save,state in zip(names,saves,states):
         timesTrained = 0
 
         logProbScores = []
+        matrices = []
+        def mm(x,y,z):
+            return (np.copy(x), np.copy(y), np.copy(z))
+        matrices.append(mm(t,e,s))
 
         for name, group in timeGrouping:
 
@@ -84,16 +103,20 @@ for name,save,state in zip(names,saves,states):
                 logProbScores.append(-logProb)
 
                 #Train the model on the sequence we have just seen
-            model.learn(seq, max_iters=50, threshold=0.01, restart_threshold=0.1,max_restarts=5, inertia=0.5)
+            model.learn(seq, max_iters=20, threshold=0.01, restart_threshold=0.1,max_restarts=5, inertia=inert)
+            matrices.append(mm(model.transitions, model.emissions, model.starts))
             timesTrained+=1
 
-        return logProbScores
+        return (logProbScores, matrices)
 
     userScores = {}
 
     def setInDict(u):
-        def z(r):
+        def z(scoresAndMatrices):
+            r = scoresAndMatrices[0]
+            m = scoresAndMatrices[1]
             userScores[u] = r
+            userMatrices[u] = m
         return z
 
     pool = mp.Pool(processes=8)
@@ -109,6 +132,11 @@ for name,save,state in zip(names,saves,states):
         done += 1
     pool.close()
     pool.join()
-
-    print("Saving:", save)
+    pool.terminate()
+    
+    save = "userScores_simple_r42_" + str(inert) + "_inertia_v2.json"
+    print("Saving:", save, flush=True)
     json.dump(userScores, open(save, "w"))
+
+    print("Saving matrices", flush=True)
+    np.save("r4.2_simple_matrices", userMatrices)
